@@ -1,0 +1,73 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+//mainly for authentication (sign in and sign up + paggawa mo ng account, automatically naka set up na kung anong level muna available sayo and weapon.)
+class SupabaseService {
+  final supabase = Supabase.instance.client;
+
+  Future<AuthResponse> signUp(String email, String password, String username) async {
+    final response = await supabase.auth.signUp(email: email, password: password);
+    final user = response.user;
+
+    if (user != null) {
+      final defaultLevel = await supabase
+          .from('levels')
+          .select()
+          .eq('is_default', true)
+          .maybeSingle();
+
+      int defaultLevelId = defaultLevel != null ? defaultLevel['id'] as int : 1;
+
+      final defaultSubLevel = await supabase
+          .from('sub_levels')
+          .select()
+          .eq('level_id', defaultLevelId)
+          .eq('is_default', true)
+          .maybeSingle();
+
+      int defaultSubLevelId = defaultSubLevel != null ? defaultSubLevel['id'] as int : 1;
+
+      await supabase.from('users_meta').insert({
+        'user_id': user.id,
+        'username': username,
+        'email': email,
+        'selected_weapon_id': 1,
+        'unlocked_levels': [defaultLevelId],
+      });
+
+      //new shit
+      await supabase.from('user_weapons').insert({
+        'user_id': user.id,
+        'weapon_id': 1,
+        'is_unlocked': true,
+      });
+
+
+      await supabase.from('user_levels').insert({
+        'user_id': user.id,
+        'sub_level_id': defaultSubLevelId,
+        'is_unlocked': true,
+        'is_completed': false,
+      });
+    }
+
+    return response;
+  }
+  Future<AuthResponse> signIn(String email, String password) async {
+    return await supabase.auth.signInWithPassword(
+      email: email,
+      password: password,
+    );
+  }
+  Future<Map<String, dynamic>?> getUserMeta() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return null;
+
+    final result = await supabase
+        .from('users_meta')
+        .select()
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+    return result;
+  }
+}
