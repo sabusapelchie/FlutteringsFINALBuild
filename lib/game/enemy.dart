@@ -238,55 +238,76 @@ class Enemy {
             stateTimer = 0;
           }
         } else if (type == 'drone') {
-          shootCooldown += dt;
-          if (behavior['shoot_interval'] != null && shootCooldown >= behavior['shoot_interval']) {
-            shootCooldown = 0;
-            final Map<String, dynamic>? projData = behavior['projectile'] as Map<String, dynamic>?;
-            if (projData != null) {
-              Projectile proj = Projectile(
-                x: x + width / 2,
-                y: y + height / 2,
-                speed: (projData['speed'] ?? 300).toDouble(),
-                damage: (projData['damage'] ?? 10) as int,
-                spritePath: projData['sprite_path'] ?? '',
-                hitParticle: projData['hit_particle'],
-              );
-              final dx = (character.x + character.width / 2) - (x + width / 2);
-              final dy = (character.y + character.height / 2) - (y + height / 2);
-              final dist = sqrt(dx * dx + dy * dy);
-              if (dist > 0) {
-                proj.vx = dx / dist * proj.speed;
-                proj.vy = dy / dist * proj.speed;
+            // Drone-specific variables
+            final double descendSpeed = (behavior['descend_speed'] ?? 60.0).toDouble();
+            final double stopY = (behavior['stop_y'] ?? 180.0).toDouble();
+            final double shootInterval = (behavior['shoot_interval'] ?? 1.5).toDouble();
+            final double dashIntervalMin = (behavior['dash_interval_min'] ?? 2.0).toDouble();
+            final double dashIntervalMax = (behavior['dash_interval_max'] ?? 4.0).toDouble();
+            final double dashSpeed = (behavior['dash_speed'] ?? 200.0).toDouble();
+          
+            // --- Descend until stopY ---
+            if (y < stopY) {
+              vy = descendSpeed;
+              y += vy * dt;
+              if (y >= stopY) {
+                y = stopY;
+                vy = 0;
+                hoverTimer = 0; // reset dash timer
+                shootCooldown = shootInterval; // ready to shoot immediately
+                hoverTargetX = x;
+                hoverTargetY = y;
               }
-              activeProjectiles.add(proj);
+              return;
             }
+          
+            // --- Shoot projectiles in random directions ---
+            shootCooldown += dt;
+            if (shootCooldown >= shootInterval) {
+              shootCooldown = 0;
+              final Map<String, dynamic>? projData = behavior['projectile'] as Map<String, dynamic>?;
+              if (projData != null) {
+                Projectile proj = Projectile(
+                  x: x + width / 2,
+                  y: y + height / 2,
+                  speed: (projData['speed'] ?? 300).toDouble(),
+                  damage: (projData['damage'] ?? 10) as int,
+                  spritePath: projData['sprite_path'] ?? '',
+                  hitParticle: projData['hit_particle'],
+                );
+                // Random direction
+                final angle = _rand.nextDouble() * pi * 2;
+                proj.vx = cos(angle) * proj.speed;
+                proj.vy = sin(angle) * proj.speed;
+                activeProjectiles.add(proj);
+              }
+            }
+          
+            // --- Dash to random position ---
+            hoverTimer += dt;
+            if (hoverTimer >= _randDouble(dashIntervalMin, dashIntervalMax)) {
+              hoverTimer = 0;
+              hoverTargetX = _randDouble(50, screenW - 50 - width);
+              hoverTargetY = _randDouble(50, screenH - 50 - height);
+            }
+          
+            // --- Move toward dash target ---
+            final dx = hoverTargetX - x;
+            final dy = hoverTargetY - y;
+            final dist = sqrt(dx * dx + dy * dy);
+            if (dist > 1.0) {
+              vx = dx / dist * dashSpeed;
+              vy = dy / dist * dashSpeed;
+              x += vx * dt;
+              y += vy * dt;
+            } else {
+              vx = 0;
+              vy = 0;
+            }
+          
+            // Prevent interference from old observe/kite/retreat logic
+            return;
           }
-          final kiteDistance = (behavior['kite_distance'] ?? 260).toDouble();
-          final retreatDistance = (behavior['retreat_distance'] ?? 160).toDouble();
-          final kiteSpeed = (behavior['kite_speed'] ?? 70).toDouble();
-          final retreatSpeed = (behavior['retreat_speed'] ?? 120).toDouble();
-          final dx = character.x - x;
-          final dy = character.y - y;
-          final dist = sqrt(dx * dx + dy * dy);
-          if (dist < retreatDistance) {
-            final rx = x - dx;
-            final ry = y - dy;
-            final rdist = sqrt(rx * rx + ry * ry);
-            vx = (rx / rdist) * retreatSpeed * 0.8;
-            vy = (ry / rdist) * retreatSpeed * 0.8;
-          } else if (dist < kiteDistance) {
-            final perpX = -dy;
-            final perpY = dx;
-            final perpLen = sqrt(perpX * perpX + perpY * perpY);
-            vx = (perpX / perpLen) * kiteSpeed;
-            vy = (perpY / perpLen) * kiteSpeed;
-          } else {
-            vx = (dx / dist) * kiteSpeed * 0.5;
-            vy = (dy / dist) * kiteSpeed * 0.5;
-          }
-          x += vx * dt;
-          y += vy * dt;
-        }
         break;
 
       case EnemyState.rushing:
