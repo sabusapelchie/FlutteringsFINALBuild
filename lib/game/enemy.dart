@@ -238,34 +238,33 @@ class Enemy {
             stateTimer = 0;
           }
         } else if (type == 'drone') {
-          // Initialize descend speed and target stop height
-          final descendSpeed = (behavior['descend_speed'] ?? 60.0).toDouble();
-          final stopY = (behavior['stop_y'] ?? 180.0).toDouble();
-          final shootInterval = (behavior['shoot_interval'] ?? 1.5).toDouble();
-          final dashIntervalMin = (behavior['dash_interval_min'] ?? 2.0).toDouble();
-          final dashIntervalMax = (behavior['dash_interval_max'] ?? 4.0).toDouble();
-          final dashSpeed = (behavior['dash_speed'] ?? 200.0).toDouble();
+          // Local variables for drone behavior
+          final double descendSpeed = (behavior['descend_speed'] ?? 60.0).toDouble();
+          final double stopY = (behavior['stop_y'] ?? 180.0).toDouble();
+          final double shootInterval = (behavior['shoot_interval'] ?? 1.5).toDouble();
+          final double dashIntervalMin = (behavior['dash_interval_min'] ?? 2.0).toDouble();
+          final double dashIntervalMax = (behavior['dash_interval_max'] ?? 4.0).toDouble();
+          final double dashSpeed = (behavior['dash_speed'] ?? 200.0).toDouble();
       
           // Descend if above stopY
-          if (y < stopY && stateTimer < 0.1) {
+          if (y < stopY) {
             vy = descendSpeed;
             y += vy * dt;
             if (y >= stopY) {
               y = stopY;
               vy = 0;
-              stateTimer = 0;
-              shootCooldown = shootInterval; // shoot immediately when stopping
+              hoverTimer = 0;
+              shootCooldown = shootInterval; // ready to shoot immediately
               hoverTargetX = x;
               hoverTargetY = y;
             }
             return;
           }
       
-          // Shooting logic
+          // Shooting
           shootCooldown += dt;
           if (shootCooldown >= shootInterval) {
             shootCooldown = 0;
-      
             final Map<String, dynamic>? projData =
                 behavior['projectile'] as Map<String, dynamic>?;
             if (projData != null) {
@@ -277,26 +276,23 @@ class Enemy {
                 spritePath: projData['sprite_path'] ?? '',
                 hitParticle: projData['hit_particle'],
               );
-      
-              // Fire in random direction
+              // Random direction
               final angle = _rand.nextDouble() * pi * 2;
               proj.vx = cos(angle) * proj.speed;
               proj.vy = sin(angle) * proj.speed;
-      
               activeProjectiles.add(proj);
             }
           }
       
-          // Dash logic
+          // Dash to new position
           hoverTimer += dt;
           if (hoverTimer >= _randDouble(dashIntervalMin, dashIntervalMax)) {
             hoverTimer = 0;
-            // Pick a new random target position anywhere on screen
             hoverTargetX = _randDouble(50, screenW - 50 - width);
             hoverTargetY = _randDouble(50, screenH - 50 - height);
           }
       
-          // Move towards hover target (dash movement)
+          // Move toward hover target
           final dx = hoverTargetX - x;
           final dy = hoverTargetY - y;
           final dist = sqrt(dx * dx + dy * dy);
