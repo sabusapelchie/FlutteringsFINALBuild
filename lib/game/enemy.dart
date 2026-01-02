@@ -11,7 +11,7 @@ import 'particle.dart';
 //Drone is basically ranged enemy, nag oorbit din yan sa character, tapos shoot projectile
 //Summoner, latest na ginawa ko, basically ginagawa netong enemy na to is nagtatawag or gumagawa siya ng enemy (galing sa enemy_id ng supabase)
 //So yeah, any enemy kaya niya isummon. Ginagamit lang siya ng Boss sa Nether level.
-enum EnemyState { descending, observing, rushing, cooldown, summoning }
+enum EnemyState { descending, observing, rushing, cooldown, summoning, drone_idle, drone_dashing }
 
 class Enemy {
   double x;
@@ -59,6 +59,16 @@ class Enemy {
   double hoverAnchorY = 0;
   double hoverPhase = 0;
   void Function(List<Particle>)? onParticlesRequested;
+
+  double droneStopY = 0;
+  double droneFireTimer = 0;
+  double droneDashTimer = 0;
+  double droneNextDashDelay = 0;
+  
+  double droneDashTargetX = 0;
+  double droneDashTargetY = 0;
+  double droneDashSpeed = 500;
+
 
   int coinReward;
   
@@ -164,12 +174,6 @@ class Enemy {
     stateTimer += dt;
   
     final type = behavior['type'] ?? 'hunter';
-
-    double dashCooldown = 0.0;
-    double dashDuration = 0.0;
-    double dashDirX = 0.0;
-    double dashDirY = 0.0;
-    bool isDashing = false;
       
     final hoverRadius = (behavior['hover_radius'] ?? 60).toDouble();
     final hoverSpeed = (behavior['hover_speed'] ?? 30).toDouble();
@@ -205,6 +209,24 @@ class Enemy {
             hoverAnchorX = screenW / 2;
             hoverAnchorY = observeHeight;
             hoverPhase = _rand.nextDouble() * pi * 2;
+          }
+          if (type == 'drone') {
+            vy = (behavior['descend_speed'] ?? 80).toDouble();
+            y += vy * dt;
+        
+            if (y >= droneStopY) {
+              y = droneStopY;
+              vy = 0;
+        
+              droneFireTimer = 0;
+              droneDashTimer = 0;
+              droneNextDashDelay = _randDouble(
+                (behavior['dash_delay_min'] ?? 1.2).toDouble(),
+                (behavior['dash_delay_max'] ?? 2.8).toDouble(),
+              );
+        
+              state = EnemyState.drone_idle;
+            }
           } else {
             _pickObserveTargetNear(
               character,
@@ -213,7 +235,76 @@ class Enemy {
           }
         }
         break;
-  
+      case EnemyState.drone_idle:
+        droneFireTimer += dt;
+        droneDashTimer += dt;
+      
+        // SHOOT
+        final shootInterval = (behavior['shoot_interval'] ?? 0.6).toDouble();
+        if (droneFireTimer >= shootInterval) {
+          droneFireTimer = 0;
+      
+          final projData = behavior['projectile'];
+          if (projData != null) {
+            final proj = Projectile(
+              x: x + width / 2,
+              y: y + height / 2,
+              speed: (projData['speed'] ?? 300).toDouble(),
+              damage: projData['damage'] ?? 10,
+              spritePath: projData['sprite_path'] ?? '',
+              hitParticle: projData['hit_particle'],
+            );
+      
+            final dx = (character.x + character.width / 2) - proj.x;
+            final dy = (character.y + character.height / 2) - proj.y;
+            final d = sqrt(dx * dx + dy * dy);
+      
+            if (d > 0) {
+              proj.vx = dx / d * proj.speed;
+              proj.vy = dy / d * proj.speed;
+            }
+      
+            activeProjectiles.add(proj);
+          }
+        }
+      
+        if (droneDashTimer >= droneNextDashDelay) {
+          droneDashTimer = 0;
+      
+          final angle = _rand.nextDouble() * pi * 2;
+          final dashDistance =
+              (behavior['dash_distance'] ?? 200).toDouble();
+      
+          droneDashTargetX = x + cos(angle) * dashDistance;
+          droneDashTargetY = y + sin(angle) * dashDistance;
+      
+          state = EnemyState.drone_dashing;
+        }
+        break;
+      case EnemyState.drone_dashing:
+        final dx = droneDashTargetX - x;
+        final dy = droneDashTargetY - y;
+        final dist = sqrt(dx * dx + dy * dy);
+      
+        if (dist > 4) {
+          vx = dx / dist * droneDashSpeed;
+          vy = dy / dist * droneDashSpeed;
+      
+          x += vx * dt;
+          y += vy * dt;
+        } else {
+          vx = 0;
+          vy = 0;
+      
+          droneNextDashDelay = _randDouble(
+            (behavior['dash_delay_min'] ?? 1.2).toDouble(),
+            (behavior['dash_delay_max'] ?? 2.8).toDouble(),
+          );
+      
+          state = EnemyState.drone_idle;
+        }
+        break;
+
       case EnemyState.observing:
         if (type != 'summoner') {
           final dx = observeTargetX - x;
@@ -275,95 +366,15 @@ class Enemy {
           }
         } 
         else if (type == 'drone') {
-          shootCooldown += dt;
-          if (behavior['shoot_interval'] != null &&
-              shootCooldown >= behavior['shoot_interval']) {
-            shootCooldown = 0;
-        
-            final projData = behavior['projectile'] as Map<String, dynamic>?;
-            if (projData != null) {
-              final proj = Projectile(
-                x: x + width / 2,
-                y: y + height / 2,
-                speed: (projData['speed'] ?? 300).toDouble(),
-                damage: (projData['damage'] ?? 10),
-                spritePath: projData['sprite_path'] ?? '',
-                hitParticle: projData['hit_particle'],
-              );
-        
-              final dx =
-                  (character.x + character.width / 2) - (x + width / 2);
-              final dy =
-                  (character.y + character.height / 2) - (y + height / 2);
-              final dist = sqrt(dx * dx + dy * dy);
-              if (dist > 0) {
-                proj.vx = dx / dist * proj.speed;
-                proj.vy = dy / dist * proj.speed;
-              }
-        
-              activeProjectiles.add(proj);
-            }
+          // INITIAL DESCEND
+          if (state == EnemyState.observing) {
+            droneStopY = (behavior['stop_y'] ?? 180).toDouble();
+            state = EnemyState.descending;
+            stateTimer = 0;
           }
-
-          hoverPhase += dt * hoverSpeed / 40;
-        
-          final a = hoverRadius;
-          final b = hoverRadius * 0.6;
-        
-          final baseX = character.x + character.width / 2;
-          final baseY = max(120.0, character.y - 140);
-        
-          final targetX = baseX + sin(hoverPhase) * a;
-          final targetY = baseY + sin(hoverPhase * 2) * b;
-        
-          dashCooldown += dt;
-        
-          if (!isDashing && dashCooldown >= (behavior['dash_interval'] ?? 2.5)) {
-            dashCooldown = 0;
-            isDashing = true;
-            dashDuration = (behavior['dash_duration'] ?? 0.25).toDouble();
-        
-            final dx = targetX - x;
-            final dy = targetY - y;
-            final dist = sqrt(dx * dx + dy * dy);
-            if (dist > 0) {
-              dashDirX = dx / dist;
-              dashDirY = dy / dist;
-            }
-          }
-        
-          if (isDashing) {
-            dashDuration -= dt;
-            final dashSpeed =
-                (behavior['dash_speed'] ?? 260).toDouble();
-        
-            vx = dashDirX * dashSpeed;
-            vy = dashDirY * dashSpeed;
-        
-            if (dashDuration <= 0) {
-              isDashing = false;
-              vx = 0;
-              vy = 0;
-            }
-          } else {
-            final dx = targetX - x;
-            final dy = targetY - y;
-            final dist = sqrt(dx * dx + dy * dy);
-        
-            if (dist > 1) {
-              vx = dx / dist * hoverSpeed;
-              vy = dy / dist * hoverSpeed;
-            } else {
-              vx = 0;
-              vy = 0;
-            }
-          }
-        
-          x += vx * dt;
-          y += vy * dt;
         }
         break;
-  
+      
       case EnemyState.rushing:
         if (type == 'hunter') {
           final dxr = character.x - x;
