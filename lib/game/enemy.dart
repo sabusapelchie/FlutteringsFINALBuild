@@ -164,6 +164,12 @@ class Enemy {
     stateTimer += dt;
   
     final type = behavior['type'] ?? 'hunter';
+
+    double dashCooldown = 0.0;
+    double dashDuration = 0.0;
+    double dashDirX = 0.0;
+    double dashDirY = 0.0;
+    bool isDashing = false;
       
     final hoverRadius = (behavior['hover_radius'] ?? 60).toDouble();
     final hoverSpeed = (behavior['hover_speed'] ?? 30).toDouble();
@@ -270,24 +276,25 @@ class Enemy {
         } 
         else if (type == 'drone') {
           shootCooldown += dt;
-          if (behavior['shoot_interval'] != null && shootCooldown >= behavior['shoot_interval']) {
+          if (behavior['shoot_interval'] != null &&
+              shootCooldown >= behavior['shoot_interval']) {
             shootCooldown = 0;
         
-            final Map<String, dynamic>? projData =
-                behavior['projectile'] as Map<String, dynamic>?;
-              
+            final projData = behavior['projectile'] as Map<String, dynamic>?;
             if (projData != null) {
-              Projectile proj = Projectile(
+              final proj = Projectile(
                 x: x + width / 2,
                 y: y + height / 2,
                 speed: (projData['speed'] ?? 300).toDouble(),
-                damage: (projData['damage'] ?? 10) as int,
+                damage: (projData['damage'] ?? 10),
                 spritePath: projData['sprite_path'] ?? '',
                 hitParticle: projData['hit_particle'],
               );
-
-              final dx = (character.x + character.width / 2) - (x + width / 2);
-              final dy = (character.y + character.height / 2) - (y + height / 2);
+        
+              final dx =
+                  (character.x + character.width / 2) - (x + width / 2);
+              final dy =
+                  (character.y + character.height / 2) - (y + height / 2);
               final dist = sqrt(dx * dx + dy * dy);
               if (dist > 0) {
                 proj.vx = dx / dist * proj.speed;
@@ -297,33 +304,59 @@ class Enemy {
               activeProjectiles.add(proj);
             }
           }
-          final kiteDistance = (behavior['kite_distance'] ?? 260).toDouble();
-          final retreatDistance = (behavior['retreat_distance'] ?? 160).toDouble();
-          final kiteSpeed = (behavior['kite_speed'] ?? 70).toDouble();
-          final retreatSpeed = (behavior['retreat_speed'] ?? 120).toDouble();
+
+          hoverPhase += dt * hoverSpeed / 40;
         
-          final dx = character.x - x;
-          final dy = character.y - y;
-          final dist = sqrt(dx * dx + dy * dy);
+          final a = hoverRadius;
+          final b = hoverRadius * 0.6;
         
-          if (dist < retreatDistance) {
-            final rx = x - dx;
-            final ry = y - dy;
-            final rdist = sqrt(rx*rx + ry*ry);
-            vx = (rx / rdist) * retreatSpeed * 0.8;
-            vy = (ry / rdist) * retreatSpeed * 0.8;
+          final baseX = character.x + character.width / 2;
+          final baseY = max(120.0, character.y - 140);
+        
+          final targetX = baseX + sin(hoverPhase) * a;
+          final targetY = baseY + sin(hoverPhase * 2) * b;
+        
+          dashCooldown += dt;
+        
+          if (!isDashing && dashCooldown >= (behavior['dash_interval'] ?? 2.5)) {
+            dashCooldown = 0;
+            isDashing = true;
+            dashDuration = (behavior['dash_duration'] ?? 0.25).toDouble();
+        
+            final dx = targetX - x;
+            final dy = targetY - y;
+            final dist = sqrt(dx * dx + dy * dy);
+            if (dist > 0) {
+              dashDirX = dx / dist;
+              dashDirY = dy / dist;
+            }
           }
-          else if (dist < kiteDistance) {
-            final perpX = -dy;
-            final perpY = dx;
-            final perpLen = sqrt(perpX*perpX + perpY*perpY);
         
-            vx = (perpX / perpLen) * kiteSpeed;
-            vy = (perpY / perpLen) * kiteSpeed;
-          }
-          else {
-            vx = (dx / dist) * kiteSpeed * 0.5;
-            vy = (dy / dist) * kiteSpeed * 0.5;
+          if (isDashing) {
+            dashDuration -= dt;
+            final dashSpeed =
+                (behavior['dash_speed'] ?? 260).toDouble();
+        
+            vx = dashDirX * dashSpeed;
+            vy = dashDirY * dashSpeed;
+        
+            if (dashDuration <= 0) {
+              isDashing = false;
+              vx = 0;
+              vy = 0;
+            }
+          } else {
+            final dx = targetX - x;
+            final dy = targetY - y;
+            final dist = sqrt(dx * dx + dy * dy);
+        
+            if (dist > 1) {
+              vx = dx / dist * hoverSpeed;
+              vy = dy / dist * hoverSpeed;
+            } else {
+              vx = 0;
+              vy = 0;
+            }
           }
         
           x += vx * dt;
