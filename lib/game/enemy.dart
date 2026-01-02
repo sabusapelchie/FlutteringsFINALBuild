@@ -211,20 +211,19 @@ class Enemy {
             hoverPhase = _rand.nextDouble() * pi * 2;
           }
           if (type == 'drone') {
-            vy = (behavior['descend_speed'] ?? 80).toDouble();
-            y += vy * dt;
-        
-            if (y >= droneStopY) {
-              y = droneStopY;
+            final speed = (behavior['descend_speed'] ?? 120).toDouble();
+            y += speed * dt;
+      
+            if (y >= (behavior['stop_y'] ?? 180)) {
+              y = (behavior['stop_y'] ?? 180);
+              vx = 0;
               vy = 0;
-        
               droneFireTimer = 0;
               droneDashTimer = 0;
               droneNextDashDelay = _randDouble(
                 (behavior['dash_delay_min'] ?? 1.2).toDouble(),
                 (behavior['dash_delay_max'] ?? 2.8).toDouble(),
               );
-        
               state = EnemyState.drone_idle;
             }
           } else {
@@ -236,14 +235,15 @@ class Enemy {
         }
         break;
       case EnemyState.drone_idle:
+        // Shooting timer
         droneFireTimer += dt;
         droneDashTimer += dt;
-      
-        // SHOOT
+    
+        // Shoot projectile if interval reached
         final shootInterval = (behavior['shoot_interval'] ?? 0.6).toDouble();
         if (droneFireTimer >= shootInterval) {
           droneFireTimer = 0;
-      
+    
           final projData = behavior['projectile'];
           if (projData != null) {
             final proj = Projectile(
@@ -254,53 +254,49 @@ class Enemy {
               spritePath: projData['sprite_path'] ?? '',
               hitParticle: projData['hit_particle'],
             );
-      
+    
             final dx = (character.x + character.width / 2) - proj.x;
             final dy = (character.y + character.height / 2) - proj.y;
             final d = sqrt(dx * dx + dy * dy);
-      
             if (d > 0) {
               proj.vx = dx / d * proj.speed;
               proj.vy = dy / d * proj.speed;
             }
-      
             activeProjectiles.add(proj);
           }
         }
-      
+    
         if (droneDashTimer >= droneNextDashDelay) {
           droneDashTimer = 0;
-      
+    
           final angle = _rand.nextDouble() * pi * 2;
-          final dashDistance =
-              (behavior['dash_distance'] ?? 200).toDouble();
-      
+          final dashDistance = (behavior['dash_distance'] ?? 200).toDouble();
+    
           droneDashTargetX = x + cos(angle) * dashDistance;
           droneDashTargetY = y + sin(angle) * dashDistance;
-      
+    
           state = EnemyState.drone_dashing;
         }
         break;
+        
       case EnemyState.drone_dashing:
         final dx = droneDashTargetX - x;
         final dy = droneDashTargetY - y;
         final dist = sqrt(dx * dx + dy * dy);
-      
+    
         if (dist > 4) {
-          vx = dx / dist * droneDashSpeed;
-          vy = dy / dist * droneDashSpeed;
-      
+          final speed = droneDashSpeed;
+          vx = dx / dist * speed;
+          vy = dy / dist * speed;
           x += vx * dt;
           y += vy * dt;
         } else {
           vx = 0;
           vy = 0;
-      
           droneNextDashDelay = _randDouble(
             (behavior['dash_delay_min'] ?? 1.2).toDouble(),
             (behavior['dash_delay_max'] ?? 2.8).toDouble(),
           );
-      
           state = EnemyState.drone_idle;
         }
         break;
