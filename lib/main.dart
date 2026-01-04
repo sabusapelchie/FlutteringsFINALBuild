@@ -17,9 +17,9 @@ void main() async {
   //Note from me: This is a very very dangerous thing to expose to those who know what they are doing, kaya better to keep the url PRIVATE.
   //And if gusto mo ipahiram ung code sa iba. rewrite url and anonKey to be [INSERT YOUR OWN KEY], especially if plano mo pa gamitin ung supabase project.
   await Supabase.initialize(
-    url: "https://nisssojyxkmiletzqjim.supabase.co", //Wag mo isend tong url in any kind of messages or public chats. Very dangerous.
+    url: "https://vjgiqsjgkbdtwebdsmld.supabase.co", //Wag mo isend tong url in any kind of messages or public chats. Very dangerous.
     anonKey:
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5pc3Nzb2p5eGttaWxldHpxamltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM2Nzk1NDEsImV4cCI6MjA3OTI1NTU0MX0.pX0qwuNXvSFXeIt9H_zemGJRbJpnKQFVkIeKZ2c2sxk",
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZqZ2lxc2pna2JkdHdlYmRzbWxkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0OTk5MDksImV4cCI6MjA4MzA3NTkwOX0.moKKY1JqclvtY9Jd1_yNbAyJR-MzBCYECA_uxIa3whE",
   );
 
   runApp(const MyApp());
